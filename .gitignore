@@ -1,0 +1,36 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# local settings
+.env
+.env.*
+!.env.example
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/backups/
+/prisma/migration-data/
+
+# safe manual deployment staging
+/.deployment/
+
+# logs and system files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Local Netlify folder
+.netlify
+
+# local audit files
+.audit/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo

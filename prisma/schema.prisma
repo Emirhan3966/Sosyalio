@@ -1,0 +1,212 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("NEON_DIRECT_URL")
+}
+
+model ServicePlatform {
+  id           Int       @id @default(autoincrement())
+  name         String
+  slug         String    @unique
+  description  String
+  displayOrder Int       @default(0)
+  isActive     Boolean   @default(true)
+  services     Service[]
+  orders       Order[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Service {
+  id          Int             @id @default(autoincrement())
+  name        String
+  slug        String
+  description String
+  isActive    Boolean         @default(true)
+  platformId  Int
+  platform    ServicePlatform @relation(fields: [platformId], references: [id])
+  packages    Package[]
+  orders      Order[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([platformId, slug])
+  @@index([platformId])
+}
+
+model Package {
+  id             Int      @id @default(autoincrement())
+  name           String
+  quantity       Int
+  price          Decimal
+  referencePrice Decimal?
+  deliveryLabel  String
+  isPopular      Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  serviceId      Int
+  service        Service  @relation(fields: [serviceId], references: [id])
+  orders         Order[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([serviceId, quantity])
+  @@index([serviceId])
+}
+
+model Order {
+  id                  String          @id @default(cuid())
+  orderNumber         String          @unique
+  customerEmail       String
+  targetUrlOrUsername String
+  platform            String
+  service             String
+  quantity            Int
+  price               Decimal
+  status              OrderStatus     @default(PENDING)
+  paymentStatus       PaymentStatus   @default(UNPAID)
+  paymentProvider     String?
+  providerOrderId     String?         @unique
+  paidAt              DateTime?
+  paymentAmount       Decimal?
+  paymentCurrency     String          @default("TRY")
+  platformId          Int
+  serviceId           Int
+  packageId           Int
+  platformRecord      ServicePlatform @relation(fields: [platformId], references: [id])
+  serviceRecord       Service         @relation(fields: [serviceId], references: [id])
+  package             Package         @relation(fields: [packageId], references: [id])
+  paymentAttempt      PaymentAttempt?
+  paymentEvents       PaymentEvent[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([customerEmail])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model PaymentAttempt {
+  id                String   @id @default(cuid())
+  orderId           String   @unique
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          String
+  checkoutReference String   @unique
+  checkoutUrl       String
+  mockTokenHash     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model PaymentEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  eventId         String
+  eventType       String
+  providerOrderId String?
+  payloadHash     String
+  result          String
+  orderId         String?
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@unique([provider, eventId])
+  @@index([providerOrderId])
+  @@index([orderId])
+}
+
+model AdminUser {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  isActive     Boolean        @default(true)
+  lastLoginAt  DateTime?
+  sessions     AdminSession[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model AdminSession {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  adminId   String
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([adminId])
+  @@index([expiresAt])
+}
+
+model RateLimitEntry {
+  id          String   @id @default(cuid())
+  scope       String
+  keyHash     String
+  attempts    Int      @default(0)
+  windowStart DateTime
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([scope, keyHash])
+  @@index([expiresAt])
+}
+
+enum SupportConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum SupportMessageSender {
+  VISITOR
+  ADMIN
+  SYSTEM
+}
+
+model SupportConversation {
+  id            String                    @id @default(cuid())
+  visitorId     String
+  visitorName   String
+  status        SupportConversationStatus @default(OPEN)
+  messages      SupportMessage[]
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  lastMessageAt DateTime                  @default(now())
+
+  @@index([visitorId, status, lastMessageAt])
+  @@index([status, lastMessageAt])
+  @@index([lastMessageAt])
+}
+
+model SupportMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   SupportConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         SupportMessageSender
+  content        String
+  createdAt      DateTime             @default(now())
+  readAt         DateTime?
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, sender, readAt])
+}
